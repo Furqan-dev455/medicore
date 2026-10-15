@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
+from django.db.models import Sum
 from .models import Patient, Doctor, Appointment, Bill, Payment
 from .forms import PatientForm, DoctorForm, AppointmentForm, BillForm, PaymentForm
 from reportlab.pdfgen import canvas
@@ -282,3 +283,93 @@ def download_invoice(request, pk):
     p.showPage()
     p.save()
     return response
+
+
+# --- API endpoints for Next.js frontend ---
+
+def dashboard_api(request):
+    recent_appointments = Appointment.objects.select_related('patient', 'doctor').order_by('-created_at')[:5]
+    payload = {
+        'stats': [
+            {'label': 'Patients', 'value': Patient.objects.filter(is_deleted=False).count(), 'change': '+12.5%', 'tone': 'emerald'},
+            {'label': 'Doctors', 'value': Doctor.objects.count(), 'change': '+4.2%', 'tone': 'blue'},
+            {'label': 'Appointments', 'value': Appointment.objects.count(), 'change': '+8.1%', 'tone': 'violet'},
+            {'label': 'Outstanding', 'value': float(Bill.objects.aggregate(total=Sum('total_amount'))['total'] or 0), 'change': '-3.4%', 'tone': 'amber'},
+        ],
+        'recent_appointments': [
+            {
+                'id': appointment.id,
+                'patient': appointment.patient.name,
+                'doctor': appointment.doctor.name,
+                'date': appointment.appointment_date.isoformat(),
+                'time': appointment.appointment_time.strftime('%H:%M'),
+                'status': appointment.status,
+            }
+            for appointment in recent_appointments
+        ],
+        'bills': [
+            {
+                'id': bill.id,
+                'patient': bill.patient.name,
+                'total': float(bill.total_amount),
+                'paid': float(bill.amount_paid),
+                'balance': float(bill.balance),
+                'status': bill.status,
+            }
+            for bill in Bill.objects.select_related('patient').order_by('-created_at')[:3]
+        ],
+    }
+    return JsonResponse(payload)
+
+
+def patient_list_api(request):
+    patients = Patient.objects.filter(is_deleted=False).order_by('-created_at')
+    payload = [{
+        'id': patient.id,
+        'name': patient.name,
+        'age': patient.age,
+        'gender': patient.gender,
+        'phone': patient.phone,
+        'address': patient.address,
+        'status': 'Active' if not patient.is_deleted else 'Discharged',
+    } for patient in patients]
+    return JsonResponse({'patients': payload})
+
+
+def doctor_list_api(request):
+    doctors = Doctor.objects.all().order_by('name')
+    payload = [{
+        'id': doctor.id,
+        'name': doctor.name,
+        'specialization': doctor.specialization,
+        'phone': doctor.phone,
+        'email': doctor.email,
+    } for doctor in doctors]
+    return JsonResponse({'doctors': payload})
+
+
+def appointment_list_api(request):
+    appointments = Appointment.objects.select_related('patient', 'doctor').order_by('-created_at')
+    payload = [{
+        'id': appointment.id,
+        'patient': appointment.patient.name,
+        'doctor': appointment.doctor.name,
+        'date': appointment.appointment_date.isoformat(),
+        'time': appointment.appointment_time.strftime('%H:%M'),
+        'status': appointment.status,
+    } for appointment in appointments]
+    return JsonResponse({'appointments': payload})
+
+
+def bill_list_api(request):
+    bills = Bill.objects.select_related('patient').order_by('-created_at')
+    payload = [{
+        'id': bill.id,
+        'patient': bill.patient.name,
+        'total': float(bill.total_amount),
+        'paid': float(bill.amount_paid),
+        'balance': float(bill.balance),
+        'status': bill.status,
+    } for bill in bills]
+    return JsonResponse({'bills': payload})
+
