@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { writeJson } from "@/data/hospitalApi";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -22,7 +24,7 @@ export default function SignupPage() {
         password1: formData.get("password1"),
         password2: formData.get("password2"),
       });
-      window.location.assign("/login");
+      router.push("/login");
       return;
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : "Unable to create account.");

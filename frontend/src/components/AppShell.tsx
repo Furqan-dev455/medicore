@@ -13,7 +13,10 @@ const navItems: Array<{ href: string; label: string; roles: PortalRole[] }> = [
   { href: "/patients", label: "Patients", roles: ["Admin", "Doctor", "Patient", "Receptionist", "Demo"] },
   { href: "/doctors", label: "Doctors", roles: ["Admin", "Doctor", "Receptionist", "Demo"] },
   { href: "/appointments", label: "Appointments", roles: ["Admin", "Doctor", "Patient", "Receptionist", "Demo"] },
+  { href: "/prescriptions", label: "Prescriptions", roles: ["Admin", "Doctor", "Patient"] },
+  { href: "/pharmacy", label: "Pharmacy inventory", roles: ["Admin", "Doctor"] },
   { href: "/bills", label: "Bills", roles: ["Admin", "Patient", "Demo"] },
+  { href: "/users", label: "User roles", roles: ["Admin"] },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -25,29 +28,35 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (pathname === "/demo") {
-      setUsername("Demo User");
-      setRole("Demo");
-      setCheckingSession(false);
-      return;
+      const timer = window.setTimeout(() => {
+        setUsername("Demo User");
+        setRole("Demo");
+        setCheckingSession(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
     if (new URLSearchParams(window.location.search).get("demo") === "1") {
-      setUsername("Demo User");
-      setRole("Demo");
-      setCheckingSession(false);
+      const timer = window.setTimeout(() => {
+        setUsername("Demo User");
+        setRole("Demo");
+        setCheckingSession(false);
+      }, 0);
       try {
         window.sessionStorage.setItem("medicore-demo-session", "true");
       } catch {
         // The demo query parameter still authorizes this page for the current navigation.
       }
-      return;
+      return () => window.clearTimeout(timer);
     }
 
     if (window.sessionStorage.getItem("medicore-demo-session") === "true") {
-      setUsername("Demo User");
-      setRole("Demo");
-      setCheckingSession(false);
-      return;
+      const timer = window.setTimeout(() => {
+        setUsername("Demo User");
+        setRole("Demo");
+        setCheckingSession(false);
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
 
     fetchJson<{ authenticated: boolean; username?: string; role?: PortalRole }>("/api/auth/session")
@@ -61,7 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       })
       .catch(() => router.replace("/login"))
       .finally(() => setCheckingSession(false));
-  }, [router]);
+  }, [pathname, router]);
 
   async function signOut() {
     if (window.sessionStorage.getItem("medicore-demo-session") === "true") {

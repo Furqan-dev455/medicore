@@ -14,7 +14,8 @@ import dj_database_url
 from decouple import config
 from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = BASE_DIR / 'backend'
 
 
 # Quick-start development settings - unsuitable for production
@@ -33,6 +34,11 @@ FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000').rstrip('/
 frontend_origins = [FRONTEND_URL]
 if FRONTEND_URL.startswith('http://localhost'):
     frontend_origins.append(FRONTEND_URL.replace('localhost', '127.0.0.1', 1))
+if DEBUG:
+    frontend_origins.extend((
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+    ))
 
 CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
     origin.strip()
@@ -61,6 +67,7 @@ ALLOW_PUBLIC_SIGNUP = config('ALLOW_PUBLIC_SIGNUP', default=DEBUG, cast=bool)
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -68,6 +75,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
      'patients.apps.PatientsConfig',
+    'simple_history',
+    'channels',
 ]
 
 MIDDLEWARE = [
@@ -78,16 +87,18 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    'simple_history.middleware.HistoryRequestMiddleware',
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+CSRF_FAILURE_VIEW = 'patients.views.csrf_failure'
 
 ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [BASE_DIR / 'templates', BACKEND_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -100,6 +111,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'core.wsgi.application'
+ASGI_APPLICATION = 'core.asgi.application'
 
 
 # Database
@@ -179,10 +191,55 @@ if AZURE_STORAGE_ACCOUNT_NAME:
         },
     }
 
-CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
+CELERY_BROKER_URL = config(
+    'CELERY_BROKER_URL',
+    default='memory://' if DEBUG else 'redis://127.0.0.1:6379/0',
+)
+CELERY_RESULT_BACKEND = config(
+    'CELERY_RESULT_BACKEND',
+    default='cache+memory://' if DEBUG and CELERY_BROKER_URL == 'memory://' else CELERY_BROKER_URL,
+)
+# Local development runs Celery tasks inline and uses an in-process Channels
+# layer, so booking and dashboard updates don't require Docker/Redis. Production
+# keeps Redis-backed workers and channel layers unless explicitly configured.
+CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=DEBUG, cast=bool)
+CELERY_TASK_EAGER_PROPAGATES = config('CELERY_TASK_EAGER_PROPAGATES', default=False, cast=bool)
+CHANNEL_REDIS_URL = config('CHANNEL_REDIS_URL', default='')
+if DEBUG and not CHANNEL_REDIS_URL:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels.layers.InMemoryChannelLayer',
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        'default': {
+            'BACKEND': 'channels_redis.core.RedisChannelLayer',
+            'CONFIG': {
+                'hosts': [CHANNEL_REDIS_URL or 'redis://127.0.0.1:6379/1'],
+            },
+        },
+    }
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 5 * 60
+SIMPLE_HISTORY_REVERT_DISABLED = True
+CELERY_BEAT_SCHEDULE = {
+    'process-appointment-reminders-every-minute': {
+        'task': 'patients.appointment_notifications.process_appointment_reminders',
+        'schedule': 60.0,
+    },
+}
+SENDGRID_API_KEY = config('SENDGRID_API_KEY', default='')
+SENDGRID_FROM_EMAIL = config('SENDGRID_FROM_EMAIL', default='')
+TWILIO_ACCOUNT_SID = config('TWILIO_ACCOUNT_SID', default='')
+TWILIO_AUTH_TOKEN = config('TWILIO_AUTH_TOKEN', default='')
+TWILIO_FROM_NUMBER = config('TWILIO_FROM_NUMBER', default='')
+TWILIO_MESSAGING_SERVICE_SID = config('TWILIO_MESSAGING_SERVICE_SID', default='')
+SMS_DEFAULT_COUNTRY_CODE = config('SMS_DEFAULT_COUNTRY_CODE', default='')
+SAFEPAY_ENVIRONMENT = config('SAFEPAY_ENVIRONMENT', default='sandbox')
+SAFEPAY_API_KEY = config('SAFEPAY_API_KEY', default='')
+SAFEPAY_SECRET_KEY = config('SAFEPAY_SECRET_KEY', default='')
+SAFEPAY_WEBHOOK_SECRET = config('SAFEPAY_WEBHOOK_SECRET', default='')
 LOGIN_REDIRECT_URL = 'patients:dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

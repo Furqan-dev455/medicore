@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
           <p className="text-xs font-medium uppercase tracking-[0.2em] text-sky-600">MediCore</p>
           <h1 className="mt-2 text-3xl font-bold text-slate-900">Reset password</h1>
         </div>
-        <form className="space-y-5" onSubmit={submit}>
+        <form className="space-y-5" method="post" onSubmit={submit}>
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700" htmlFor="email">Account email</label>
             <input autoComplete="email" className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none focus:border-sky-500 focus:bg-white" id="email" name="email" required type="email" />

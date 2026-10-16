@@ -16,15 +16,15 @@ export default function AppointmentsPage() {
   const [error, setError] = useState("");
 
   const fields: RecordField[] = [
-    { name: "patient", label: "Patient", type: "select", options: patients.map((patient) => ({ value: patient.id, label: patient.name })) },
+    ...(role === "Patient" ? [] : [{ name: "patient", label: "Patient", type: "select" as const, options: patients.map((patient) => ({ value: patient.id, label: patient.name })) }]),
     { name: "doctor", label: "Doctor", type: "select", options: doctors.map((doctor) => ({ value: doctor.id, label: `${doctor.name} · ${doctor.specialization}` })) },
     { name: "appointment_date", label: "Date", type: "date" },
     { name: "appointment_time", label: "Time", type: "time" },
-    { name: "status", label: "Status", type: "select", options: [
+    ...(role === "Patient" ? [] : [{ name: "status", label: "Status", type: "select" as const, options: [
       { value: "Scheduled", label: "Scheduled" },
       { value: "Completed", label: "Completed" },
       { value: "Cancelled", label: "Cancelled" },
-    ] },
+    ] }]),
     { name: "notes", label: "Notes", type: "textarea", required: false },
   ];
 
@@ -61,7 +61,7 @@ export default function AppointmentsPage() {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-600">Schedule</p>
             <h2 className="mt-2 text-3xl font-bold text-slate-900">Appointments</h2>
           </div>
-          {(role === "Admin" || role === "Receptionist") && <button className="rounded-md bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600" onClick={() => { setEditing(null); setDialogOpen(true); }}>Book appointment</button>}
+          {(role === "Admin" || role === "Receptionist" || role === "Patient") && <button className="rounded-md bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600" onClick={() => { setEditing(null); setDialogOpen(true); }}>Book appointment</button>}
         </header>
 
         {error && <p className="text-sm text-rose-700" role="alert">{error}</p>}

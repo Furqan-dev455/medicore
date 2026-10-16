@@ -40,7 +40,7 @@ export function PaymentDialog({ bill, onClose, onSaved }: PaymentDialogProps) {
       <section aria-labelledby="payment-dialog-title" aria-modal="true" className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl" role="dialog">
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900" id="payment-dialog-title">Record payment</h2>
+            <h2 className="text-xl font-semibold text-slate-900" id="payment-dialog-title">Record offline payment</h2>
             <p className="mt-1 text-sm text-slate-500">{bill.patient} · Bill #{bill.id}</p>
           </div>
           <button aria-label="Close payment form" className="text-slate-500 hover:text-slate-900" onClick={onClose} type="button">Close</button>
@@ -59,7 +59,6 @@ export function PaymentDialog({ bill, onClose, onSaved }: PaymentDialogProps) {
             <label className="mb-1.5 block text-sm font-medium text-slate-700" htmlFor="payment-method">Payment method</label>
             <select id="payment-method" name="payment_method" required defaultValue="Cash" className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-600 focus:ring-2 focus:ring-sky-100">
               <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
               <option value="Bank Transfer">Bank transfer</option>
             </select>
           </div>
@@ -67,7 +66,7 @@ export function PaymentDialog({ bill, onClose, onSaved }: PaymentDialogProps) {
           <div className="flex justify-end gap-3 border-t border-slate-200 pt-4">
             <button className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50" onClick={onClose} type="button">Cancel</button>
             <button className="rounded-md bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:cursor-wait disabled:opacity-60" disabled={saving} type="submit">
-              {saving ? "Recording..." : "Record payment"}
+              {saving ? "Recording..." : "Record offline payment"}
             </button>
           </div>
         </form>

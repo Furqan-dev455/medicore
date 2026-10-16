@@ -2,7 +2,8 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from django.db.models import Q
-from .models import Patient, Doctor, Appointment, Bill, Payment
+
+from .models import Appointment, Bill, Doctor, Medication, Patient, Payment
 
 
 class SignUpForm(UserCreationForm):
@@ -23,10 +24,11 @@ class SignUpForm(UserCreationForm):
 
 
 def patient_queryset_for(instance):
-    patients = Patient.objects.filter(is_deleted=False)
-    if instance.pk and instance.patient.is_deleted:
+    """Active patients, plus the record's current patient if it was soft-deleted later,
+    so editing an old appointment or bill still validates."""
+    if instance.pk and instance.patient_id and instance.patient.is_deleted:
         return Patient.objects.filter(Q(is_deleted=False) | Q(pk=instance.patient_id))
-    return patients
+    return Patient.objects.active()
 
 
 class PatientForm(forms.ModelForm):
@@ -35,12 +37,18 @@ class PatientForm(forms.ModelForm):
         fields = ['name', 'age', 'gender', 'phone', 'address', 'medical_history']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Full name'}),
-            'age': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Age'}),
+            'age': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Age', 'min': '0', 'max': '150'}),
             'gender': forms.Select(attrs={'class': 'form-select'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}),
             'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Address'}),
             'medical_history': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Medical history (optional)'}),
         }
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if not name:
+            raise forms.ValidationError('Patient name is required.')
+        return name
 
 
 class DoctorForm(forms.ModelForm):
@@ -53,6 +61,12 @@ class DoctorForm(forms.ModelForm):
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}),
             'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email address'}),
         }
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if not name:
+            raise forms.ValidationError('Doctor name is required.')
+        return name
 
 
 class AppointmentForm(forms.ModelForm):
@@ -94,6 +108,10 @@ class BillForm(forms.ModelForm):
 
 
 class PaymentForm(forms.ModelForm):
+    # Card payments must be settled through the gateway webhook, never
+    # entered manually by a staff user.
+    MANUAL_METHODS = (Payment.PaymentMethod.CASH, Payment.PaymentMethod.BANK_TRANSFER)
+
     class Meta:
         model = Payment
         fields = ['amount', 'payment_method']
@@ -110,9 +128,32 @@ class PaymentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         self.bill = kwargs.pop('bill', None)
         super().__init__(*args, **kwargs)
+        self.fields['payment_method'].choices = [
+            (value, label) for value, label in Payment.PaymentMethod.choices if value in self.MANUAL_METHODS
+        ]
 
     def clean_amount(self):
         amount = self.cleaned_data['amount']
-        if self.bill and amount > self.bill.balance:
-            raise forms.ValidationError(f"Amount cannot exceed balance of {self.bill.balance}")
+        if self.bill:
+            balance = self.bill.balance
+            if amount > balance:
+                raise forms.ValidationError(f'Amount cannot exceed the remaining balance of {balance}.')
         return amount
+
+
+class MedicationForm(forms.ModelForm):
+    class Meta:
+        model = Medication
+        fields = ['name', 'strength', 'dosage_form', 'unit', 'stock_quantity', 'low_stock_threshold', 'is_active']
+
+    def clean_name(self):
+        name = self.cleaned_data['name'].strip()
+        if not name:
+            raise forms.ValidationError('Medicine name is required.')
+        return name
+
+    def clean_strength(self):
+        return self.cleaned_data['strength'].strip()
+
+    def clean_dosage_form(self):
+        return self.cleaned_data['dosage_form'].strip()

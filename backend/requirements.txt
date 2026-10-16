@@ -1,4 +1,6 @@
 asgiref==3.11.1
+channels[daphne]==4.3.2
+channels-redis==4.3.0
 celery[redis]==5.5.3
 charset-normalizer==3.4.7
 dj-database-url==3.1.2
@@ -10,6 +12,8 @@ pillow==12.2.0
 psycopg2-binary==2.9.12
 python-decouple==3.8
 reportlab==5.0.0
+requests==2.32.5
+django-simple-history==3.13.0
 sqlparse==0.5.5
 tzdata==2026.2
 whitenoise==6.12.0

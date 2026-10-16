@@ -40,15 +40,13 @@ export function NewRecordDialog({ role, onClose, onSaved }: NewRecordDialogProps
   const [resource, setResource] = useState<Resource | null>(null);
   const [patients, setPatients] = useState<PatientApi[]>([]);
   const [doctors, setDoctors] = useState<DoctorApi[]>([]);
-  const [loadingReferences, setLoadingReferences] = useState(false);
+  const [loadingReferences, setLoadingReferences] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (resource !== "appointments" && resource !== "bills") return;
 
     let cancelled = false;
-    setLoadingReferences(true);
-    setError("");
     Promise.all([
       fetchAuthenticatedJson<{ patients: PatientApi[] }>("/api/patients/"),
       resource === "appointments"
@@ -71,6 +69,12 @@ export function NewRecordDialog({ role, onClose, onSaved }: NewRecordDialogProps
       cancelled = true;
     };
   }, [resource]);
+
+  function chooseResource(nextResource: Resource) {
+    setError("");
+    setLoadingReferences(true);
+    setResource(nextResource);
+  }
 
   if (resource) {
     if (loadingReferences) {
@@ -138,7 +142,7 @@ export function NewRecordDialog({ role, onClose, onSaved }: NewRecordDialogProps
         </div>
         <div className="grid grid-cols-2 gap-3">
           {(role === "Admin" ? ["patients", "doctors", "appointments", "bills"] as Resource[] : ["appointments"] as Resource[]).map((type) => (
-            <button key={type} className="rounded-lg border border-slate-200 px-4 py-3 text-left font-medium capitalize text-slate-800 hover:border-sky-500 hover:bg-sky-50" onClick={() => setResource(type)} type="button">
+            <button key={type} className="rounded-lg border border-slate-200 px-4 py-3 text-left font-medium capitalize text-slate-800 hover:border-sky-500 hover:bg-sky-50" onClick={() => chooseResource(type)} type="button">
               {type.slice(0, -1)}
             </button>
           ))}

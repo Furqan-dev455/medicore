@@ -7,6 +7,8 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  // Allow the frontend to hydrate and connect to HMR when opened from this LAN host.
+  allowedDevOrigins: ["192.168.100.219"],
   turbopack: {
     root: projectRoot,
     rules: {

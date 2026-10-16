@@ -132,8 +132,9 @@ export async function fetchAuthenticatedJson<T>(url: string): Promise<T> {
 
 async function getCsrfToken(): Promise<string> {
   const response = await fetch(toApiUrl("/api/csrf"), { cache: "no-store", credentials: "include" });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error ?? `Request failed: ${response.status}`);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(data?.error ?? `Request failed: ${response.status}`);
+  if (!data || typeof data.csrfToken !== "string") throw new Error("The server did not provide a CSRF token. Refresh and try again.");
   return data.csrfToken as string;
 }
 
@@ -154,7 +155,11 @@ export async function writeJson<T>(url: string, method: "POST" | "PUT", payload:
 
   if (!response.ok) {
     if (!data || typeof data !== "object") {
-      throw new Error(`Request failed: ${response.status}. The server returned a non-JSON response.`);
+      // Django's debug error page is HTML, so avoid surfacing its contents in
+      // the UI. Include the API path to make matching the failure to the
+      // backend traceback straightforward.
+      const path = new URL(normalizedUrl, window.location.href).pathname;
+      throw new Error(`Request failed: ${response.status} (${method} ${path}). The server returned a non-JSON response.`);
     }
     const errorData = data as { errors?: Record<string, string[]>; error?: string };
     const fieldErrors = errorData.errors

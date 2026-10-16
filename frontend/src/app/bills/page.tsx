@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { usePortalRole } from "@/components/usePortalRole";
 import { PaymentDialog } from "@/components/PaymentDialog";
+import { PatientCheckoutDialog } from "@/components/PatientCheckoutDialog";
 import { RecordDialog, RecordField } from "@/components/RecordDialog";
 import { BillApi, fetchAuthenticatedJson, PatientApi } from "@/data/hospitalApi";
 
@@ -13,9 +14,11 @@ export default function BillsPage() {
   const [patients, setPatients] = useState<PatientApi[]>([]);
   const [editing, setEditing] = useState<BillApi | null>(null);
   const [paying, setPaying] = useState<BillApi | null>(null);
+  const [checkingOut, setCheckingOut] = useState<BillApi | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [error, setError] = useState("");
   const [invoiceMessage, setInvoiceMessage] = useState("");
+  const [paymentMessage, setPaymentMessage] = useState("");
 
   const fields: RecordField[] = [
     { name: "patient", label: "Patient", type: "select", options: patients.map((patient) => ({ value: patient.id, label: patient.name })) },
@@ -55,6 +58,49 @@ export default function BillsPage() {
     return () => window.clearInterval(timer);
   }, [bills]);
 
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const tracker = query.get("tracker");
+    if (query.get("payment") === "cancelled") {
+      window.setTimeout(() => setPaymentMessage("Checkout was cancelled. Your bill is unchanged."), 0);
+    }
+    if (!tracker) return;
+
+    let stopped = false;
+    let timer: number | undefined;
+    const startedAt = Date.now();
+    window.setTimeout(() => setPaymentMessage("Checking payment with Safepay..."), 0);
+
+    async function pollStatus() {
+      try {
+        const status = await fetchAuthenticatedJson<{ status: "pending" | "completed" | "failed" }>(
+          `/api/payment-checkouts/${encodeURIComponent(tracker!)}/`,
+        );
+        if (stopped) return;
+        if (status.status === "completed") {
+          const updated = await fetchAuthenticatedJson<{ bills: BillApi[] }>("/api/bills/");
+          if (stopped) return;
+          setBills(updated.bills);
+          setPaymentMessage("Payment confirmed. Your bill has been updated.");
+        } else if (status.status === "failed") {
+          setPaymentMessage("This checkout could not be completed. You can try again.");
+        } else if (Date.now() - startedAt < 90000) {
+          timer = window.setTimeout(pollStatus, 2500);
+        } else {
+          setPaymentMessage("Payment confirmation is still pending. Refresh this page in a moment.");
+        }
+      } catch {
+        if (!stopped) setPaymentMessage("Unable to check payment status. Refresh the bills page to try again.");
+      }
+    }
+
+    void pollStatus();
+    return () => {
+      stopped = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, []);
+
   async function downloadInvoice(bill: BillApi) {
     setInvoiceMessage("");
     try {
@@ -88,6 +134,7 @@ export default function BillsPage() {
         </header>
 
         {error && <p className="text-sm text-rose-700" role="alert">{error}</p>}
+        {paymentMessage && <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800" role="status">{paymentMessage}</p>}
         {invoiceMessage && <p className="text-sm text-sky-800" role="status">{invoiceMessage}</p>}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-slate-200">
@@ -122,6 +169,7 @@ export default function BillsPage() {
                   <td className="px-5 py-4">
                     <div className="flex flex-wrap gap-3">
                       {role === "Admin" && bill.status !== "Paid" && <button className="font-medium text-emerald-700 hover:text-emerald-900" onClick={() => setPaying(bill)}>Record payment</button>}
+                      {role === "Patient" && bill.balance > 0 && <button className="font-medium text-emerald-700 hover:text-emerald-900" onClick={() => setCheckingOut(bill)} type="button">Pay securely</button>}
                       <button className="font-medium text-sky-700 hover:text-sky-900 disabled:text-slate-400" disabled={bill.invoice_status !== "ready"} onClick={() => downloadInvoice(bill)} type="button">
                         {bill.invoice_status === "processing" ? "Preparing invoice…" : bill.invoice_status === "failed" ? "Invoice unavailable" : "Invoice PDF"}
                       </button>
@@ -148,6 +196,7 @@ export default function BillsPage() {
         onSaved={loadData}
       />}
       {paying && <PaymentDialog bill={paying} onClose={() => setPaying(null)} onSaved={loadData} />}
+      {checkingOut && <PatientCheckoutDialog bill={checkingOut} onClose={() => setCheckingOut(null)} />}
     </AppShell>
   );
 }

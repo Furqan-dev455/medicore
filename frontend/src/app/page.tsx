@@ -11,6 +11,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [newRecordOpen, setNewRecordOpen] = useState(false);
+  const [liveNotice, setLiveNotice] = useState("");
 
   const loadDashboard = useCallback(async () => {
     const dashboard = await fetchAuthenticatedJson<DashboardData>("/api/dashboard/");
@@ -18,14 +19,63 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    loadDashboard()
-      .catch((error) => {
+    if (data?.role !== "Doctor") return;
+
+    let socket: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryDelay = 1000;
+    let stopped = false;
+    const websocketBase = process.env.NEXT_PUBLIC_WS_BASE
+      || `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.hostname}:8000`;
+
+    function connect() {
+      if (stopped) return;
+      const url = new URL("/ws/notifications/", websocketBase);
+      socket = new WebSocket(url);
+      socket.onopen = () => { retryDelay = 1000; };
+      socket.onmessage = (message) => {
+        let event: { type?: string };
+        try {
+          event = JSON.parse(message.data) as { type?: string };
+        } catch {
+          return;
+        }
+        if (event.type === "appointment.created") {
+          setLiveNotice("A new appointment was added to your schedule.");
+        } else if (event.type === "bill.payment_recorded") {
+          setLiveNotice("A payment was recorded for one of your patients.");
+        } else {
+          return;
+        }
+        void loadDashboard().catch((error) => console.error("Unable to refresh dashboard:", error));
+      };
+      socket.onclose = () => {
+        if (stopped) return;
+        retryTimer = setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30000);
+      };
+      socket.onerror = () => socket?.close();
+    }
+
+    connect();
+    return () => {
+      stopped = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [data?.role, loadDashboard]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      loadDashboard().catch((error) => {
         if (error instanceof ApiError && error.status === 401) {
           router.replace("/login");
           return;
         }
         console.error("Dashboard API error:", error);
       });
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadDashboard, router]);
 
   if (!data) {
@@ -52,6 +102,8 @@ export default function DashboardPage() {
             </button>
           )}
         </header>
+
+        {liveNotice && <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800" role="status">{liveNotice}</p>}
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {data.stats.map((stat) => (
