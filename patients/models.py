@@ -8,7 +8,7 @@ from django.utils import timezone
 
 
 class Doctor(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True, related_name='doctor_profile')
     name = models.CharField(max_length=200)
     specialization = models.CharField(max_length=200)
     phone = models.CharField(max_length=20)
@@ -26,6 +26,7 @@ class Patient(models.Model):
         OTHER = "Other", "Other"
 
     name = models.CharField(max_length=200)
+    user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='patient_profile')
     age = models.PositiveIntegerField()
     gender = models.CharField(
         max_length=10,
@@ -40,6 +41,11 @@ class Patient(models.Model):
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        permissions = [
+            ('view_patient_medical_history', 'Can view patient medical history'),
+        ]
 
     def __str__(self):
         return self.name
@@ -86,6 +92,13 @@ class Bill(models.Model):
         default=BillStatus.UNPAID,
     )
     description = models.TextField(blank=True)
+    invoice_pdf = models.FileField(upload_to='invoices/', blank=True)
+    invoice_status = models.CharField(
+        max_length=12,
+        choices=[('pending', 'Pending'), ('processing', 'Processing'), ('ready', 'Ready'), ('failed', 'Failed')],
+        default='pending',
+    )
+    invoice_email_sent = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

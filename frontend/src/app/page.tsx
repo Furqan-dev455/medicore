@@ -1,20 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { NewRecordDialog } from "@/components/NewRecordDialog";
 import { StatCard } from "@/components/StatCard";
-import { DashboardData, fetchJson } from "@/data/hospitalApi";
+import { ApiError, DashboardData, fetchAuthenticatedJson } from "@/data/hospitalApi";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [newRecordOpen, setNewRecordOpen] = useState(false);
+
+  const loadDashboard = useCallback(async () => {
+    const dashboard = await fetchAuthenticatedJson<DashboardData>("/api/dashboard/");
+    setData(dashboard);
+  }, []);
 
   useEffect(() => {
-    fetchJson<DashboardData>("/api/dashboard/")
-      .then(setData)
+    loadDashboard()
       .catch((error) => {
+        if (error instanceof ApiError && error.status === 401) {
+          router.replace("/login");
+          return;
+        }
         console.error("Dashboard API error:", error);
       });
-  }, []);
+  }, [loadDashboard, router]);
 
   if (!data) {
     return (
@@ -34,9 +46,11 @@ export default function DashboardPage() {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-600">Overview</p>
             <h2 className="mt-2 text-3xl font-bold text-slate-900">Dashboard</h2>
           </div>
-          <button className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-500">
-            New record
-          </button>
+          {(data.role === "Admin" || data.role === "Receptionist") && (
+            <button className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-sky-500" onClick={() => setNewRecordOpen(true)}>
+              New record
+            </button>
+          )}
         </header>
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -108,6 +122,13 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
+      {newRecordOpen && (
+        <NewRecordDialog
+          role={data.role === "Receptionist" ? "Receptionist" : "Admin"}
+          onClose={() => setNewRecordOpen(false)}
+          onSaved={loadDashboard}
+        />
+      )}
     </AppShell>
   );
 }

@@ -176,7 +176,30 @@ DEBUG=True
 DATABASE_URL=your_database_url
 ALLOWED_HOSTS=localhost,127.0.0.1
 CSRF_TRUSTED_ORIGINS=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=your-full-gmail-address
+EMAIL_HOST_PASSWORD=your-google-app-password
+EMAIL_USE_TLS=True
+DEFAULT_FROM_EMAIL=MediCore <your-full-gmail-address>
+CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+# Optional Azure Blob Storage (otherwise invoices use local media storage)
+AZURE_STORAGE_ACCOUNT_NAME=your-storage-account
+AZURE_STORAGE_ACCOUNT_KEY=your-storage-account-key
+AZURE_STORAGE_CONTAINER=medicore-media
 ```
+
+For Gmail, use your full Gmail address as `EMAIL_HOST_USER` and as the email address in `DEFAULT_FROM_EMAIL`. You can use a display name such as `MediCore <you@gmail.com>`. Create an App Password in your Google Account and put that in `EMAIL_HOST_PASSWORD`; Gmail app passwords require 2-Step Verification. Google documents [Gmail SMTP settings](https://support.google.com/mail/answer/7104828) and [App Passwords](https://support.google.com/accounts/answer/2461835). Keep real credentials in your local `.env`, never in source control, then restart Django. If `EMAIL_HOST` is not set during development, Django prints reset emails in the server console instead.
+
+Invoice PDFs are generated asynchronously after a payment is recorded. Install the Python packages from `requirements.txt`, start Redis, apply migrations with `python manage.py migrate`, and run a Celery worker in a second terminal with `celery -A core worker -l info` (on Windows, add `-P solo`). The patient must have a linked user account with an email address to receive the generated invoice. Without Azure settings, invoice files are stored under local media storage; to persist invoices across deployments, configure Azure Blob Storage above. Keep Azure credentials in the environment and never commit them.
+
+## Role-based access
+
+Run `python manage.py migrate` after updating the application. It creates the `Admin`, `Doctor`, `Patient`, and `Receptionist` groups and adds the patient-account link. New accounts have no access role until an administrator assigns one.
+
+Use Django Admin (`/admin/`) to assign a user to exactly one role group. For a patient account, also set that user's account on the matching Patient record. For a doctor account, set the account on the matching Doctor record. The API then scopes patient, appointment, and bill data to those links. Doctor and Admin groups receive the custom medical-history permission; receptionists can view patient demographics and schedule appointments but not medical histories or billing. Patients can view only their linked profile, appointments, bills, and invoice PDFs. Admin users can manage all records and billing.
 
 ---
 

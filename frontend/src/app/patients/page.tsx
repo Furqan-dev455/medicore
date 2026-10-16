@@ -2,15 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { fetchJson, PatientApi } from "@/data/hospitalApi";
+import { usePortalRole } from "@/components/usePortalRole";
+import { RecordDialog, RecordField } from "@/components/RecordDialog";
+import { fetchAuthenticatedJson, PatientApi } from "@/data/hospitalApi";
+
+const fields: RecordField[] = [
+  { name: "name", label: "Full name" },
+  { name: "age", label: "Age", type: "number", min: "0" },
+  { name: "gender", label: "Gender", type: "select", options: [
+    { value: "Male", label: "Male" },
+    { value: "Female", label: "Female" },
+    { value: "Other", label: "Other" },
+  ] },
+  { name: "phone", label: "Phone" },
+  { name: "address", label: "Address", type: "textarea" },
+  { name: "medical_history", label: "Medical history", type: "textarea", required: false },
+];
 
 export default function PatientsPage() {
+  const role = usePortalRole();
   const [patients, setPatients] = useState<PatientApi[]>([]);
+  const [editing, setEditing] = useState<PatientApi | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [error, setError] = useState("");
+
+  async function loadPatients() {
+    const data = await fetchAuthenticatedJson<{ patients: PatientApi[] }>("/api/patients/");
+    setPatients(data.patients);
+  }
 
   useEffect(() => {
-    fetchJson<{ patients: PatientApi[] }>("/api/patients/")
+    fetchAuthenticatedJson<{ patients: PatientApi[] }>("/api/patients/")
       .then((data) => setPatients(data.patients))
-      .catch((error) => console.error("Patients API error:", error));
+      .catch((loadError) => setError(loadError.message));
   }, []);
 
   return (
@@ -21,9 +45,10 @@ export default function PatientsPage() {
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-sky-600">Records</p>
             <h2 className="mt-2 text-3xl font-bold text-slate-900">Patients</h2>
           </div>
-          <button className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500">Add patient</button>
+          {role === "Admin" && <button className="rounded-md bg-sky-700 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600" onClick={() => { setEditing(null); setDialogOpen(true); }}>Add patient</button>}
         </header>
 
+        {error && <p className="text-sm text-rose-700" role="alert">{error}</p>}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <table className="min-w-full divide-y divide-slate-200">
             <thead className="bg-slate-50 text-left text-sm text-slate-600">
@@ -33,6 +58,7 @@ export default function PatientsPage() {
                 <th className="px-5 py-4 font-medium">Gender</th>
                 <th className="px-5 py-4 font-medium">Phone</th>
                 <th className="px-5 py-4 font-medium">Status</th>
+                <th className="px-5 py-4 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-sm text-slate-700">
@@ -58,12 +84,23 @@ export default function PatientsPage() {
                       {patient.status}
                     </span>
                   </td>
+                  <td className="px-5 py-4">
+                    {role === "Admin" && <button className="font-medium text-sky-700 hover:text-sky-900" onClick={() => { setEditing(patient); setDialogOpen(true); }}>Edit</button>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+      {dialogOpen && <RecordDialog
+        title={editing ? "Edit patient" : "Add patient"}
+        resource="patients"
+        fields={fields}
+        initialValue={editing ?? undefined}
+        onClose={() => setDialogOpen(false)}
+        onSaved={loadPatients}
+      />}
     </AppShell>
   );
 }

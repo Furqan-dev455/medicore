@@ -29,12 +29,33 @@ ALLOWED_HOSTS = config(
     "ALLOWED_HOSTS",
     default="localhost,127.0.0.1",
 ).split(",")
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000').rstrip('/')
+frontend_origins = [FRONTEND_URL]
+if FRONTEND_URL.startswith('http://localhost'):
+    frontend_origins.append(FRONTEND_URL.replace('localhost', '127.0.0.1', 1))
 
-CSRF_TRUSTED_ORIGINS = [
+CSRF_TRUSTED_ORIGINS = list(dict.fromkeys([
     origin.strip()
     for origin in config("CSRF_TRUSTED_ORIGINS", default="").split(",")
     if origin.strip()
-]
+    ] + frontend_origins))
+
+EMAIL_HOST = config('EMAIL_HOST', default='')
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default=(
+        'django.core.mail.backends.smtp.EmailBackend'
+        if EMAIL_HOST or not DEBUG
+        else 'django.core.mail.backends.console.EmailBackend'
+    ),
+)
+EMAIL_PORT = config('EMAIL_PORT', default=25, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='') or EMAIL_HOST_USER or 'noreply@medicore.local'
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=False, cast=bool)
+EMAIL_USE_SSL = config('EMAIL_USE_SSL', default=False, cast=bool)
+ALLOW_PUBLIC_SIGNUP = config('ALLOW_PUBLIC_SIGNUP', default=DEBUG, cast=bool)
 
 
 # Application definition
@@ -46,7 +67,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-     'patients',
+     'patients.apps.PatientsConfig',
 ]
 
 MIDDLEWARE = [
@@ -140,10 +161,28 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+AZURE_STORAGE_ACCOUNT_NAME = config('AZURE_STORAGE_ACCOUNT_NAME', default='')
+if AZURE_STORAGE_ACCOUNT_NAME:
+    STORAGES['default'] = {
+        'BACKEND': 'storages.backends.azure_storage.AzureStorage',
+        'OPTIONS': {
+            'account_name': AZURE_STORAGE_ACCOUNT_NAME,
+            'account_key': config('AZURE_STORAGE_ACCOUNT_KEY', default=''),
+            'azure_container': config('AZURE_STORAGE_CONTAINER', default='medicore-media'),
+        },
+    }
+
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default=CELERY_BROKER_URL)
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 5 * 60
 LOGIN_REDIRECT_URL = 'patients:dashboard'
 LOGOUT_REDIRECT_URL = 'login'
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
